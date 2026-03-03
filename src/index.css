@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   Control de Acceso UCI - Estilos globales
+   ============================================ */
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply text-uci-gray-800 bg-uci-gray-50;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Scrollbar personalizada */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-uci-gray-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-uci-gray-400;
+  }
+
+  /* Focus visible mejorado */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-uci-secondary ring-offset-2;
+  }
+}
+
+@layer components {
+  /* Card base */
+  .card {
+    @apply bg-white rounded-xl border border-uci-gray-200 shadow-card;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-card-hover transition-shadow;
+  }
+
+  /* Input base */
+  .input-base {
+    @apply w-full px-3 py-2.5 border border-uci-gray-300 rounded-lg text-sm 
+           focus:ring-2 focus:ring-uci-secondary focus:border-uci-secondary 
+           outline-none transition-all placeholder:text-uci-gray-400;
+  }
+
+  /* Animación de entrada */
+  .animate-in {
+    animation: animateIn 0.3s ease-out;
+  }
+
+  @keyframes animateIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Pulse para el escáner */
+  .scan-pulse {
+    animation: scanPulse 2s infinite;
+  }
+
+  @keyframes scanPulse {
+    0%, 100% {
+      border-color: theme('colors.uci.gray.300');
+    }
+    50% {
+      border-color: theme('colors.uci.primary');
+      box-shadow: 0 0 0 3px rgba(26, 58, 92, 0.1);
+    }
+  }
+}
+
+@layer utilities {
+  /* Truncar texto */
+  .text-truncate {
+    @apply truncate overflow-hidden whitespace-nowrap;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

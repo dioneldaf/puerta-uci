@@ -1,0 +1,20 @@
+-- ============================================================
+-- MIGRACIÓN 002: Crear usuario admin inicial
+-- 
+-- INSTRUCCIONES:
+-- 1. Primero crea un usuario en Supabase Auth (Dashboard > Authentication > Users)
+--    con el email que desees para el admin.
+-- 2. Copia el UUID del usuario creado.
+-- 3. Reemplaza 'TU_UUID_AQUI' con ese UUID.
+-- 4. Ejecuta esta migración.
+-- ============================================================
+
+-- Reemplaza el UUID y datos según tu usuario admin
+-- INSERT INTO usuarios (id, nombre, email, rol, activo)
+-- VALUES (
+--   'TU_UUID_AQUI',
+--   'Administrador Principal',
+--   'admin@uci.cu',
+--   'admin',
+--   true
+-- );
