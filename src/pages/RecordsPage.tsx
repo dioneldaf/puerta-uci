@@ -150,19 +150,43 @@ export default function RecordsPage() {
     },
   ];
 
+  const getPersonaNombre = (record: RegistroAccesoCompleto) => {
+    const p = record.persona as any;
+    return `${p?.nombre_completo || ''} ${p?.primer_apellido || ''} ${p?.segundo_apellido || ''}`.trim() || 'Desconocido';
+  };
+
+  const getPersonaCarnet = (record: RegistroAccesoCompleto) => {
+    const p = record.persona as any;
+    return p?.carnet_identidad || '—';
+  };
+
+  const getPuertaNombre = (record: RegistroAccesoCompleto) => {
+    return (record.puerta as any)?.nombre || '—';
+  };
+
+  const getGuardiaNombre = (record: RegistroAccesoCompleto) => {
+    return (record.guardia as any)?.nombre || '—';
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-uci-gray-900 flex items-center gap-2">
-            <ClipboardList size={28} className="text-uci-primary" />
+          <h2 className="text-xl sm:text-2xl font-bold text-uci-gray-900 flex items-center gap-2">
+            <ClipboardList size={24} className="text-uci-primary sm:w-7 sm:h-7" />
             Registro de Accesos
           </h2>
-          <p className="text-uci-gray-500 mt-1">
+          <p className="text-sm sm:text-base text-uci-gray-500 mt-1">
             Historial completo de entradas y salidas
           </p>
         </div>
-        <Button variant="ghost" onClick={cargarRegistros} icon={<RefreshCw size={16} />} size="sm">
+        <Button
+          variant="ghost"
+          onClick={cargarRegistros}
+          icon={<RefreshCw size={16} />}
+          size="sm"
+          className="self-start sm:self-auto"
+        >
           Actualizar
         </Button>
       </div>
@@ -173,7 +197,7 @@ export default function RecordsPage() {
           <Filter size={16} className="text-uci-gray-500" />
           <span className="text-sm font-medium text-uci-gray-700">Filtros</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-2.5 text-uci-gray-400" />
             <input
@@ -219,15 +243,97 @@ export default function RecordsPage() {
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={records as unknown as Record<string, unknown>[]}
-        loading={loading}
-        emptyMessage="No hay registros de acceso"
-        page={page}
-        totalPages={totalPages}
-        onPageChange={setPage}
-      />
+      {/* Vista móvil */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="bg-white rounded-xl border border-uci-gray-200 px-4 py-10 text-center text-uci-gray-500 shadow-card">
+            Cargando registros...
+          </div>
+        ) : records.length === 0 ? (
+          <div className="bg-white rounded-xl border border-uci-gray-200 px-4 py-10 text-center text-uci-gray-500 shadow-card">
+            No hay registros de acceso
+          </div>
+        ) : (
+          records.map((record) => (
+            <div key={record.id} className="bg-white rounded-xl border border-uci-gray-200 p-4 shadow-card">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-uci-gray-800 truncate">{getPersonaNombre(record)}</p>
+                  <p className="text-xs text-uci-gray-500 mt-0.5">CI: {getPersonaCarnet(record)}</p>
+                </div>
+                <StatusBadge
+                  status={record.estado === 'permitido' ? 'success' : 'danger'}
+                  label={record.estado === 'permitido' ? 'Permitido' : 'Denegado'}
+                  size="sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <p className="text-uci-gray-500">Fecha</p>
+                <p className="text-right text-uci-gray-700 font-medium">
+                  {format(new Date(record.fecha_hora), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
+                </p>
+
+                <p className="text-uci-gray-500">Puerta</p>
+                <p className="text-right text-uci-gray-700 font-medium truncate">{getPuertaNombre(record)}</p>
+
+                <p className="text-uci-gray-500">Tipo</p>
+                <div className="justify-self-end">
+                  <StatusBadge
+                    status={record.tipo_acceso === 'activo' ? 'info' : 'warning'}
+                    label={record.tipo_acceso === 'activo' ? 'Activo' : 'Inactivo'}
+                    size="sm"
+                  />
+                </div>
+
+                <p className="text-uci-gray-500">Guardia</p>
+                <p className="text-right text-uci-gray-700 font-medium truncate">{getGuardiaNombre(record)}</p>
+
+                <p className="text-uci-gray-500">Motivo</p>
+                <p className="text-right text-uci-gray-700 font-medium truncate">{record.motivo_acceso || '—'}</p>
+              </div>
+            </div>
+          ))
+        )}
+
+        {totalPages > 1 && (
+          <div className="bg-white rounded-xl border border-uci-gray-200 px-4 py-3 shadow-card flex items-center justify-between">
+            <span className="text-xs text-uci-gray-600">
+              Página {page} de {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page <= 1}
+              >
+                Anterior
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={page >= totalPages}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:block">
+        <DataTable
+          columns={columns}
+          data={records as unknown as Record<string, unknown>[]}
+          loading={loading}
+          emptyMessage="No hay registros de acceso"
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+        />
+      </div>
     </div>
   );
 }

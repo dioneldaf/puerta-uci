@@ -37,8 +37,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo y título */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-32 h-32 bg-white rounded-2xl shadow-lg mb-4">
-            <img src="/logo-uci.png" alt="PuertaUCI" className="w-28 h-28" />
+          <div className="inline-flex items-center justify-center gap-3 px-4 py-3 bg-white rounded-2xl shadow-lg mb-4">
+            <img src="/logo-puerta-uci.png" alt="Puerta UCI" className="h-14 sm:h-16 w-auto object-contain" />
+            <img src="/logo-uci.png" alt="Logo UCI" className="h-14 sm:h-16 w-auto object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-uci-gray-900 tracking-tight">
             PuertaUCI

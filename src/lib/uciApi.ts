@@ -3,6 +3,8 @@ import type { UCISearchResponse, UCIPersonaAPI } from '../types';
 const UCI_API_URL = import.meta.env.VITE_UCI_API_URL || '/api/uci/sgu-directorio/_search';
 const UCI_API_AUTH = import.meta.env.VITE_UCI_API_AUTH || 'Basic Y2FjY2VzbzpTaVRyMipzc2R5dDUzQUswMjQt';
 
+type UCISearchField = 'carnet_identidad' | 'numero_solapin' | 'solapin_codigobarra';
+
 /**
  * Buscar persona en el directorio UCI por carnet de identidad
  */
@@ -11,8 +13,20 @@ export async function buscarPersonaUCI(carnetIdentidad: string): Promise<{
   persona: UCIPersonaAPI | null;
   isActive: boolean;
 }> {
+  return buscarPersonaUCIPorCampo('carnet_identidad', carnetIdentidad);
+}
+
+/**
+ * Buscar persona en el directorio UCI por un campo específico
+ */
+export async function buscarPersonaUCIPorCampo(campo: UCISearchField, valor: string): Promise<{
+  found: boolean;
+  persona: UCIPersonaAPI | null;
+  isActive: boolean;
+}> {
   try {
-    const url = `${UCI_API_URL}?q=carnet_identidad:${encodeURIComponent(carnetIdentidad)}`;
+    const query = `${campo}:${valor}`;
+    const url = `${UCI_API_URL}?q=${encodeURIComponent(query)}`;
     
     const response = await fetch(url, {
       method: 'GET',

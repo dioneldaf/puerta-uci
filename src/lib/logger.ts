@@ -23,10 +23,17 @@ type LogAccion =
   | 'admin_creado'
   | 'admin_editado'
   | 'admin_eliminado'
+  | 'vehiculo_creado'
+  | 'vehiculo_editado'
+  | 'vehiculo_eliminado'
+  | 'vehiculo_activado'
+  | 'vehiculo_desactivado'
+  | 'vehiculo_entrada'
+  | 'vehiculo_salida'
   | 'exportacion_excel'
   | 'error_sistema';
 
-type LogEntidad = 'puerta' | 'guardia' | 'admin' | 'acceso' | 'persona' | 'auth' | 'sistema';
+type LogEntidad = 'puerta' | 'guardia' | 'admin' | 'acceso' | 'persona' | 'vehiculo' | 'auth' | 'sistema';
 
 /**
  * Registrar una acción en el log del sistema

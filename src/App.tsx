@@ -7,6 +7,8 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AccessControlPage from './pages/AccessControlPage';
 import RecordsPage from './pages/RecordsPage';
+import VehicleAccessPage from './pages/VehicleAccessPage';
+import VehiclesPage from './pages/VehiclesPage';
 import GatesPage from './pages/GatesPage';
 import UserManagementPage from './pages/UserManagementPage';
 import ExportPage from './pages/ExportPage';
@@ -87,8 +89,17 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/control-acceso" element={<AccessControlPage />} />
         <Route path="/registros" element={<RecordsPage />} />
+        <Route path="/control-vehiculos" element={<VehicleAccessPage />} />
 
         {/* Solo admin */}
+        <Route
+          path="/vehiculos"
+          element={
+            <ProtectedRoute requireAdmin>
+              <VehiclesPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/puertas"
           element={
