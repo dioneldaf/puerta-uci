@@ -77,6 +77,39 @@ export interface LogSistema {
   created_at: string;
 }
 
+export type TipoVehiculo = 'auto' | 'moto' | 'triciclo';
+export type AccionVehiculo = 'entrada' | 'salida';
+
+export interface VehiculoAutorizado {
+  id: string;
+  nombre: string;
+  apellidos: string;
+  carnet_identidad: string;
+  tipo: TipoVehiculo;
+  chapa: string | null;
+  acceso_hasta: string;
+  activo: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RegistroVehiculo {
+  id: string;
+  vehiculo_id: string | null;
+  conductor_nombre: string;
+  conductor_apellidos: string;
+  carnet_identidad: string;
+  tipo: TipoVehiculo;
+  chapa: string | null;
+  puerta_id: string;
+  guardia_id: string;
+  accion: AccionVehiculo;
+  fecha_hora: string;
+  created_at: string;
+}
+
 // --- UCI API ---
 export interface UCIPersonaAPI {
   nombre_completo: string;

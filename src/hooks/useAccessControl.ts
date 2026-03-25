@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { buscarPersonaUCI } from '../lib/uciApi';
+import { useState, useCallback, useEffect } from 'react';
+import { buscarPersonaUCIPorCampo } from '../lib/uciApi';
 import { supabase } from '../lib/supabase';
 import { registrarLog } from '../lib/logger';
 import type { UCIPersonaAPI, Persona, RegistroAccesoCompleto, TipoAcceso, EstadoAcceso } from '../types';
@@ -14,48 +14,229 @@ export interface PersonaLookupState {
   ultimasEntradas: RegistroAccesoCompleto[];
 }
 
-export function usePersonLookup() {
-  const [state, setState] = useState<PersonaLookupState>({
-    loading: false,
-    error: null,
-    persona: null,
-    personaLocal: null,
-    found: false,
-    isActive: false,
-    ultimasEntradas: [],
-  });
+export type TipoEntradaLookup =
+  | 'carnet_manual'
+  | 'carnet_escan'
+  | 'solapin'
+  | 'desconocida';
 
-  const buscarPorCarnet = useCallback(async (carnet: string) => {
+export interface EntradaEscaneadaData {
+  carnetIdentidad: string;
+  nombres: string;
+  primerApellido: string;
+  segundoApellido: string;
+}
+
+export interface LookupEntradaResult {
+  carnetIdentidad: string;
+  tipoEntrada: TipoEntradaLookup;
+  entradaEscaneada: EntradaEscaneadaData | null;
+}
+
+const ACCESS_LOOKUP_STORAGE_KEY = 'access_control_lookup_state_v1';
+
+const DEFAULT_LOOKUP_STATE: PersonaLookupState = {
+  loading: false,
+  error: null,
+  persona: null,
+  personaLocal: null,
+  found: false,
+  isActive: false,
+  ultimasEntradas: [],
+};
+
+function cargarLookupStatePersistido(): PersonaLookupState {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LOOKUP_STATE;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(ACCESS_LOOKUP_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_LOOKUP_STATE;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<PersonaLookupState>;
+    return {
+      ...DEFAULT_LOOKUP_STATE,
+      ...parsed,
+      // Nunca rehidratar el estado de carga como true
+      loading: false,
+    };
+  } catch {
+    return DEFAULT_LOOKUP_STATE;
+  }
+}
+
+function normalizarEspacios(texto: string): string {
+  return texto.replace(/\s+/g, ' ').trim();
+}
+
+function capitalizarPalabras(texto: string): string {
+  const limpio = normalizarEspacios(texto);
+  if (!limpio) {
+    return '';
+  }
+
+  return limpio
+    .split(' ')
+    .map((palabra) =>
+      palabra
+        .split('-')
+        .map((segmento) => {
+          if (!segmento) {
+            return segmento;
+          }
+
+          const lower = segmento.toLocaleLowerCase('es-ES');
+          return lower.charAt(0).toLocaleUpperCase('es-ES') + lower.slice(1);
+        })
+        .join('-')
+    )
+    .join(' ');
+}
+
+function extraerCarnetDesdeEscaneo(entrada: string): string | null {
+  const match = entrada.match(/CI:([0-9]{11})/);
+  return match ? match[1] : null;
+}
+
+function parsearCarnetEscaneado(entrada: string): EntradaEscaneadaData | null {
+  const carnetIdentidad = extraerCarnetDesdeEscaneo(entrada);
+  if (!carnetIdentidad) {
+    return null;
+  }
+
+  const nombresMatch = entrada.match(/N:(.*?)A:/);
+  const apellidosMatch = entrada.match(/A:(.*?)CI:/);
+
+  const nombres = normalizarEspacios(nombresMatch?.[1] || '');
+  const apellidosTexto = normalizarEspacios(apellidosMatch?.[1] || '');
+  const partesApellido = apellidosTexto ? apellidosTexto.split(' ') : [];
+  const primerApellido = partesApellido[0] || '';
+  const segundoApellido = partesApellido.slice(1).join(' ');
+
+  return {
+    carnetIdentidad,
+    nombres: capitalizarPalabras(nombres),
+    primerApellido: capitalizarPalabras(primerApellido),
+    segundoApellido: capitalizarPalabras(segundoApellido),
+  };
+}
+
+export function usePersonLookup() {
+  const [state, setState] = useState<PersonaLookupState>(cargarLookupStatePersistido);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(ACCESS_LOOKUP_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Ignorar errores de persistencia en sesión
+    }
+  }, [state]);
+
+  const buscarPorEntrada = useCallback(async (entradaCruda: string): Promise<LookupEntradaResult> => {
+    const entrada = entradaCruda.trim();
+    if (!entrada) {
+      return {
+        carnetIdentidad: '',
+        tipoEntrada: 'desconocida',
+        entradaEscaneada: null,
+      };
+    }
+
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      // 1. Buscar en API UCI (puede fallar por red, etc.)
       let apiResult: { found: boolean; persona: UCIPersonaAPI | null; isActive: boolean } = {
         found: false,
         persona: null,
         isActive: false,
       };
       let apiError: string | null = null;
+      let criterioBusqueda = 'desconocido';
+      let carnetNormalizado: string | null = null;
+      let tipoEntrada: TipoEntradaLookup = 'desconocida';
+      let entradaEscaneada: EntradaEscaneadaData | null = null;
 
-      try {
-        apiResult = await buscarPersonaUCI(carnet);
-      } catch (err) {
-        apiError = err instanceof Error ? err.message : 'Error consultando API UCI';
-        console.warn('Error en API UCI, se intentará con datos locales:', err);
+      if (/^[0-9]{11}/.test(entrada)) {
+        // 1) Carnet manual (11 números al inicio)
+        carnetNormalizado = entrada.slice(0, 11);
+        criterioBusqueda = 'carnet_identidad_manual';
+        tipoEntrada = 'carnet_manual';
+        try {
+          apiResult = await buscarPersonaUCIPorCampo('carnet_identidad', carnetNormalizado);
+        } catch (err) {
+          apiError = err instanceof Error ? err.message : 'Error consultando API UCI';
+          console.warn('Error en API UCI, se intentará con datos locales:', err);
+        }
+      } else if (entrada.startsWith('N:')) {
+        // 2) Carnet escaneado (extraer CI:XXXXXXXXXXX)
+        entradaEscaneada = parsearCarnetEscaneado(entrada);
+        criterioBusqueda = 'carnet_identidad_escan';
+        tipoEntrada = 'carnet_escan';
+
+        if (entradaEscaneada?.carnetIdentidad) {
+          carnetNormalizado = entradaEscaneada.carnetIdentidad;
+          try {
+            apiResult = await buscarPersonaUCIPorCampo('carnet_identidad', entradaEscaneada.carnetIdentidad);
+          } catch (err) {
+            apiError = err instanceof Error ? err.message : 'Error consultando API UCI';
+            console.warn('Error en API UCI, se intentará con datos locales:', err);
+          }
+        }
+      } else {
+        // 3/4) Solapín manual o escaneado
+        criterioBusqueda = 'numero_solapin';
+        tipoEntrada = 'solapin';
+        try {
+          apiResult = await buscarPersonaUCIPorCampo('numero_solapin', entrada);
+          if (!apiResult.found) {
+            criterioBusqueda = 'solapin_codigobarra';
+            apiResult = await buscarPersonaUCIPorCampo('solapin_codigobarra', entrada);
+          }
+        } catch (err) {
+          apiError = err instanceof Error ? err.message : 'Error consultando API UCI';
+          console.warn('Error en API UCI para solapín:', err);
+        }
       }
 
-      // 2. Siempre buscar en la BD local (persona + últimas entradas)
+      if (apiResult.persona?.carnet_identidad) {
+        carnetNormalizado = apiResult.persona.carnet_identidad;
+      }
+
+      // Buscar en la BD local por carnet (solo si hay carnet normalizado)
       let personaLocal: Persona | null = null;
       let ultimasEntradas: RegistroAccesoCompleto[] = [];
 
-      const { data: personaExistente } = await supabase
-        .from('personas')
-        .select('*')
-        .eq('carnet_identidad', carnet)
-        .single();
+      let personaExistente: Persona | null = null;
+      if (carnetNormalizado) {
+        const { data } = await supabase
+          .from('personas')
+          .select('*')
+          .eq('carnet_identidad', carnetNormalizado)
+          .single();
+
+        personaExistente = (data as Persona | null) || null;
+      } else if (tipoEntrada === 'solapin') {
+        const { data } = await supabase
+          .from('personas')
+          .select('*')
+          .eq('numero_solapin', entrada)
+          .single();
+
+        personaExistente = (data as Persona | null) || null;
+        if (personaExistente?.carnet_identidad) {
+          carnetNormalizado = personaExistente.carnet_identidad;
+        }
+      }
 
       if (personaExistente) {
-        personaLocal = personaExistente as Persona;
+        personaLocal = personaExistente;
 
         // Cargar últimas 3 entradas
         const { data: entradasDirectas } = await supabase
@@ -76,7 +257,11 @@ export function usePersonLookup() {
       // 3. Si la API falló pero tenemos datos locales, no mostrar error al guardia
       const showError = apiError && !personaLocal ? apiError : null;
 
-      await registrarLog('persona_buscada', 'persona', carnet, {
+      await registrarLog('persona_buscada', 'persona', carnetNormalizado || entrada, {
+        entrada_original: entrada,
+        criterio_busqueda: criterioBusqueda,
+        tipo_entrada: tipoEntrada,
+        carnet_resuelto: carnetNormalizado,
         encontrada: apiResult.found,
         activa: apiResult.isActive,
         datosLocales: !!personaLocal,
@@ -97,6 +282,12 @@ export function usePersonLookup() {
         isActive: apiResult.isActive,
         ultimasEntradas,
       });
+
+      return {
+        carnetIdentidad: apiResult.persona?.carnet_identidad || personaLocal?.carnet_identidad || carnetNormalizado || entrada,
+        tipoEntrada,
+        entradaEscaneada,
+      };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Error desconocido';
       setState(prev => ({
@@ -104,22 +295,24 @@ export function usePersonLookup() {
         loading: false,
         error: errorMsg,
       }));
+
+      return {
+        carnetIdentidad: entrada,
+        tipoEntrada: 'desconocida',
+        entradaEscaneada: null,
+      };
     }
   }, []);
 
+  const buscarPorCarnet = useCallback(async (carnet: string) => {
+    return buscarPorEntrada(carnet);
+  }, [buscarPorEntrada]);
+
   const resetear = useCallback(() => {
-    setState({
-      loading: false,
-      error: null,
-      persona: null,
-      personaLocal: null,
-      found: false,
-      isActive: false,
-      ultimasEntradas: [],
-    });
+    setState(DEFAULT_LOOKUP_STATE);
   }, []);
 
-  return { ...state, buscarPorCarnet, resetear };
+  return { ...state, buscarPorCarnet, buscarPorEntrada, resetear };
 }
 
 /**

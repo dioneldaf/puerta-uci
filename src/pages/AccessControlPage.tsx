@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePersonLookup, useRegistrarAcceso } from '../hooks/useAccessControl';
 import { supabase } from '../lib/supabase';
@@ -26,7 +26,54 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
+type EntradaTipoActual = 'carnet_manual' | 'carnet_escan' | 'solapin' | 'desconocida';
+
+interface AccessControlPagePersistedState {
+  inputValue: string;
+  carnetActual: string;
+  puertaSeleccionada: string;
+  motivo: string;
+  observaciones: string;
+  nombreManual: string;
+  apellido1Manual: string;
+  apellido2Manual: string;
+  entradaTipoActual: EntradaTipoActual;
+}
+
+const ACCESS_PAGE_STORAGE_KEY = 'access_control_page_state_v1';
+
+const DEFAULT_PAGE_STATE: AccessControlPagePersistedState = {
+  inputValue: '',
+  carnetActual: '',
+  puertaSeleccionada: '',
+  motivo: '',
+  observaciones: '',
+  nombreManual: '',
+  apellido1Manual: '',
+  apellido2Manual: '',
+  entradaTipoActual: 'desconocida',
+};
+
+function cargarEstadoPaginaPersistido(): AccessControlPagePersistedState {
+  if (typeof window === 'undefined') {
+    return DEFAULT_PAGE_STATE;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(ACCESS_PAGE_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_PAGE_STATE;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AccessControlPagePersistedState>;
+    return { ...DEFAULT_PAGE_STATE, ...parsed };
+  } catch {
+    return DEFAULT_PAGE_STATE;
+  }
+}
+
 export default function AccessControlPage() {
+  const estadoPersistido = cargarEstadoPaginaPersistido();
   const { usuario } = useAuth();
   const {
     loading: lookupLoading,
@@ -36,33 +83,31 @@ export default function AccessControlPage() {
     found,
     isActive,
     ultimasEntradas,
-    buscarPorCarnet,
+    buscarPorEntrada,
     resetear,
   } = usePersonLookup();
   const { registrarAcceso, loading: registroLoading } = useRegistrarAcceso();
 
-  const [inputValue, setInputValue] = useState('');
-  const [carnetActual, setCarnetActual] = useState('');
+  const [inputValue, setInputValue] = useState(estadoPersistido.inputValue);
+  const [carnetActual, setCarnetActual] = useState(estadoPersistido.carnetActual);
   const [puertas, setPuertas] = useState<Puerta[]>([]);
-  const [puertaSeleccionada, setPuertaSeleccionada] = useState('');
+  const [puertaSeleccionada, setPuertaSeleccionada] = useState(estadoPersistido.puertaSeleccionada);
   const [showReasonModal, setShowReasonModal] = useState(false);
-  const [motivo, setMotivo] = useState('');
-  const [observaciones, setObservaciones] = useState('');
+  const [motivo, setMotivo] = useState(estadoPersistido.motivo);
+  const [observaciones, setObservaciones] = useState(estadoPersistido.observaciones);
   const [accionPendiente, setAccionPendiente] = useState<EstadoAcceso | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [lastResult, setLastResult] = useState<{ estado: EstadoAcceso; nombre: string } | null>(null);
-  const [nombreManual, setNombreManual] = useState('');
-  const [apellido1Manual, setApellido1Manual] = useState('');
-  const [apellido2Manual, setApellido2Manual] = useState('');
+  const [nombreManual, setNombreManual] = useState(estadoPersistido.nombreManual);
+  const [apellido1Manual, setApellido1Manual] = useState(estadoPersistido.apellido1Manual);
+  const [apellido2Manual, setApellido2Manual] = useState(estadoPersistido.apellido2Manual);
+  const [entradaTipoActual, setEntradaTipoActual] = useState<EntradaTipoActual>(estadoPersistido.entradaTipoActual);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Determinar si necesitamos pedir nombre manualmente:
-  // Solo cuando la persona NO está en UCI API Y (no existe en BD local O tiene "Desconocido" como nombre/apellido)
-  const necesitaNombre = !found && (
-    !personaLocal ||
-    personaLocal.nombre_completo === 'Desconocido' ||
-    personaLocal.primer_apellido === 'Desconocido'
-  );
+  const tieneDatosLocalesConNombre = !!personaLocal &&
+    personaLocal.nombre_completo !== 'Desconocido' &&
+    personaLocal.primer_apellido !== 'Desconocido';
+  const puedePermitirNoEncontrado = entradaTipoActual === 'carnet_escan' || tieneDatosLocalesConNombre;
 
   // Cargar puertas
   useEffect(() => {
@@ -85,46 +130,74 @@ export default function AccessControlPage() {
     inputRef.current?.focus();
   }, []);
 
-  // Detectar 11 dígitos consecutivos
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const raw = e.target.value;
-      // Si se ingresa algo que no sea dígito, reiniciar el campo
-      if (/\D/.test(raw)) {
-        setInputValue('');
-        return;
-      }
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
 
-      setInputValue(raw);
+    const data: AccessControlPagePersistedState = {
+      inputValue,
+      carnetActual,
+      puertaSeleccionada,
+      motivo,
+      observaciones,
+      nombreManual,
+      apellido1Manual,
+      apellido2Manual,
+      entradaTipoActual,
+    };
 
-      if (raw.length === 11) {
-        setCarnetActual(raw);
-        buscarPorCarnet(raw);
-        // Limpiar input después de un breve delay
-        setTimeout(() => setInputValue(''), 100);
-      }
-    },
-    [buscarPorCarnet]
-  );
+    try {
+      window.sessionStorage.setItem(ACCESS_PAGE_STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignorar errores de persistencia en sesión
+    }
+  }, [
+    inputValue,
+    carnetActual,
+    puertaSeleccionada,
+    motivo,
+    observaciones,
+    nombreManual,
+    apellido1Manual,
+    apellido2Manual,
+    entradaTipoActual,
+  ]);
 
-  // Manejar pegar contenido
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLInputElement>) => {
-      const pasted = e.clipboardData.getData('text').replace(/\D/g, '');
-      if (pasted.length === 11) {
-        e.preventDefault();
-        setCarnetActual(pasted);
-        setInputValue('');
-        buscarPorCarnet(pasted);
-      }
-    },
-    [buscarPorCarnet]
-  );
+  const handleLookupSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+
+    const entrada = inputValue.trim();
+    if (!entrada || lookupLoading) {
+      return;
+    }
+
+    const { carnetIdentidad, tipoEntrada, entradaEscaneada } = await buscarPorEntrada(entrada);
+    setEntradaTipoActual(tipoEntrada);
+
+    if (tipoEntrada === 'carnet_escan' && entradaEscaneada) {
+      setNombreManual(entradaEscaneada.nombres);
+      setApellido1Manual(entradaEscaneada.primerApellido);
+      setApellido2Manual(entradaEscaneada.segundoApellido);
+    } else {
+      setNombreManual('');
+      setApellido1Manual('');
+      setApellido2Manual('');
+    }
+
+    setCarnetActual(carnetIdentidad || entrada);
+    setInputValue('');
+  };
 
   // Procesar decisión de acceso
   const procesarAcceso = async (estado: EstadoAcceso) => {
     if (!puertaSeleccionada) {
       toast.error('Debe seleccionar una puerta antes de registrar el acceso');
+      return;
+    }
+
+    if (estado === 'permitido' && !found && !puedePermitirNoEncontrado) {
+      toast.error('Persona no encontrada. Solo puede permitirse si viene por carnet escaneado o ya tiene datos previos.');
       return;
     }
 
@@ -193,10 +266,9 @@ export default function AccessControlPage() {
       toast.error('Debe especificar un motivo');
       return;
     }
-    // Solo exigir nombre/apellido si realmente se necesita
-    if (necesitaNombre) {
+    if (entradaTipoActual === 'carnet_escan' && !found) {
       if (!nombreManual.trim() || !apellido1Manual.trim()) {
-        toast.error('Debe ingresar el nombre y primer apellido de la persona');
+        toast.error('No se pudieron extraer correctamente nombre y apellidos del carnet escaneado.');
         return;
       }
     }
@@ -217,7 +289,9 @@ export default function AccessControlPage() {
 
   const resetearTodo = () => {
     resetear();
+    setInputValue('');
     setCarnetActual('');
+    setEntradaTipoActual('desconocida');
     setMotivo('');
     setObservaciones('');
     setNombreManual('');
@@ -239,7 +313,7 @@ export default function AccessControlPage() {
           Control de Acceso
         </h2>
         <p className="text-uci-gray-500 mt-1">
-          Escanee o ingrese el carnet de identidad para verificar autorización
+          Ingrese o escanee carnet/solapín y confirme con Enter o el botón Buscar
         </p>
       </div>
 
@@ -270,23 +344,35 @@ export default function AccessControlPage() {
         <div className="flex items-center justify-center gap-2 mb-4">
           <CreditCard size={24} className="text-uci-primary" />
           <h3 className="text-lg font-semibold text-uci-gray-800">
-            Escanear Carnet de Identidad
+            Identificación de Persona
           </h3>
         </div>
         <p className="text-sm text-uci-gray-500 mb-4">
-          El sistema detectará automáticamente los 11 dígitos del carnet
+          Soporta carnet manual, carnet escaneado, solapín manual y solapín escaneado
         </p>
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={handleInputChange}
-          onPaste={handlePaste}
-          placeholder="Esperando escaneo del carnet..."
-          className="w-full max-w-md mx-auto px-6 py-4 border-2 border-uci-gray-300 rounded-xl text-center text-2xl font-mono tracking-[0.3em] focus:ring-2 focus:ring-uci-primary focus:border-uci-primary outline-none transition-all placeholder:text-uci-gray-300 placeholder:text-base placeholder:tracking-normal placeholder:font-sans"
-          autoFocus
-          autoComplete="off"
-        />
+        <form onSubmit={handleLookupSubmit} className="w-full max-w-2xl mx-auto">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Carnet o solapín (manual o escaneado)"
+              className="flex-1 px-4 py-3 border-2 border-uci-gray-300 rounded-xl text-base font-mono focus:ring-2 focus:ring-uci-primary focus:border-uci-primary outline-none transition-all placeholder:text-uci-gray-300 placeholder:text-sm"
+              autoFocus
+              autoComplete="off"
+            />
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              loading={lookupLoading}
+              className="sm:min-w-[140px]"
+            >
+              Buscar
+            </Button>
+          </div>
+        </form>
         {lookupLoading && (
           <div className="mt-4 flex items-center justify-center gap-2 text-uci-primary">
             <Loader2 size={20} className="animate-spin" />
@@ -425,12 +511,12 @@ export default function AccessControlPage() {
               ) : (
                 <div className="text-center py-4">
                   <p className="text-uci-gray-600 mb-2">
-                    No se encontraron datos para el carnet:{' '}
+                    No se encontraron datos para el identificador:{' '}
                     <span className="font-mono font-bold">{carnetActual}</span>
                   </p>
                   <p className="text-sm text-uci-gray-500">
-                    Esta persona no aparece en el directorio UCI.
-                    Se requiere motivo para permitir entrada.
+                    Esta persona no aparece en el directorio UCI. Solo se puede permitir entrada si
+                    vino por carnet escaneado o ya tenía datos registrados previamente.
                   </p>
                 </div>
               )}
@@ -492,6 +578,7 @@ export default function AccessControlPage() {
               size="lg"
               onClick={() => procesarAcceso('permitido')}
               loading={registroLoading}
+              disabled={!found && !puedePermitirNoEncontrado}
               icon={<CheckCircle2 size={20} />}
               className="min-w-[200px]"
             >
@@ -587,33 +674,33 @@ export default function AccessControlPage() {
             </select>
           </div>
           {/* Campos de nombre para personas no encontradas en el sistema */}
-          {necesitaNombre && (
+          {!found && entradaTipoActual === 'carnet_escan' && (
             <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-sm font-medium text-blue-800">
-                Datos de la persona (obligatorios)
+                Datos extraídos del carnet escaneado
               </p>
               <div>
                 <label className="block text-sm font-medium text-uci-gray-700 mb-1">
-                  Nombre(s) <span className="text-status-danger">*</span>
+                  Nombre(s)
                 </label>
                 <input
                   type="text"
                   value={nombreManual}
-                  onChange={(e) => setNombreManual(e.target.value)}
-                  placeholder="Nombre(s) de la persona"
+                  readOnly
+                  placeholder="Nombre(s) detectados"
                   className="w-full px-3 py-2 border border-uci-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-uci-secondary focus:border-uci-secondary outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-uci-gray-700 mb-1">
-                    Primer apellido <span className="text-status-danger">*</span>
+                    Primer apellido
                   </label>
                   <input
                     type="text"
                     value={apellido1Manual}
-                    onChange={(e) => setApellido1Manual(e.target.value)}
-                    placeholder="Primer apellido"
+                    readOnly
+                    placeholder="Primer apellido detectado"
                     className="w-full px-3 py-2 border border-uci-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-uci-secondary focus:border-uci-secondary outline-none"
                   />
                 </div>
@@ -624,8 +711,8 @@ export default function AccessControlPage() {
                   <input
                     type="text"
                     value={apellido2Manual}
-                    onChange={(e) => setApellido2Manual(e.target.value)}
-                    placeholder="Segundo apellido"
+                    readOnly
+                    placeholder="Segundo apellido detectado"
                     className="w-full px-3 py-2 border border-uci-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-uci-secondary focus:border-uci-secondary outline-none"
                   />
                 </div>

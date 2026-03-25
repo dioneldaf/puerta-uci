@@ -121,28 +121,28 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-uci-gray-900">
+        <h2 className="text-xl sm:text-2xl font-bold text-uci-gray-900 break-words">
           Bienvenido, {usuario?.nombre}
         </h2>
-        <p className="text-uci-gray-500 mt-1">
+        <p className="text-sm sm:text-base text-uci-gray-500 mt-1">
           Panel de control del sistema de acceso UCI
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         {statCards.map((card) => (
           <div
             key={card.label}
-            className="bg-white rounded-xl border border-uci-gray-200 p-6 shadow-card hover:shadow-card-hover transition-shadow"
+            className="bg-white rounded-xl border border-uci-gray-200 p-4 sm:p-6 shadow-card hover:shadow-card-hover transition-shadow"
           >
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-uci-gray-500 font-medium">{card.label}</p>
-                <p className="text-3xl font-bold text-uci-gray-900 mt-1">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-uci-gray-500 font-medium truncate">{card.label}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-uci-gray-900 mt-1">
                   {loading ? '...' : card.value}
                 </p>
               </div>
-              <div className={`p-3 rounded-xl ${card.bg}`}>
+              <div className={`p-2.5 sm:p-3 rounded-xl shrink-0 ${card.bg}`}>
                 <span className={card.color}>{card.icon}</span>
               </div>
             </div>

@@ -1,39 +1,58 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogOut, Shield, User } from 'lucide-react';
+import { LogOut, Menu, Shield, User } from 'lucide-react';
 
-export default function Header() {
+interface HeaderProps {
+  onToggleSidebar: () => void;
+}
+
+export default function Header({ onToggleSidebar }: HeaderProps) {
   const { usuario, signOut } = useAuth();
   const navigate = useNavigate();
 
   return (
     <header className="bg-white border-b border-uci-gray-200 shadow-sm sticky top-0 z-40">
-      <div className="flex items-center justify-between px-6 h-16">
+      <div className="flex items-center justify-between px-4 sm:px-6 h-16">
         {/* Logo y título */}
-        <div
-          className="flex items-center gap-3 cursor-pointer"
-          onClick={() => navigate('/')}
-        >
-          <img
-            src="/logo-uci.png"
-            alt="UCI"
-            className="w-10 h-10"
-          />
-          <div>
-            <h1 className="text-lg font-bold text-uci-primary tracking-tight">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="md:hidden p-2 rounded-lg text-uci-gray-600 hover:bg-uci-gray-100"
+            aria-label="Abrir menú"
+          >
+            <Menu size={20} />
+          </button>
+          <div
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer"
+            onClick={() => navigate('/')}
+          >
+            <img
+              src="/logo-puerta-uci.png"
+              alt="Puerta UCI"
+              className="h-9 sm:h-10 w-auto object-contain"
+            />
+            <img
+              src="/logo-uci.png"
+              alt="Logo UCI"
+              className="h-9 sm:h-10 w-auto object-contain"
+            />
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-uci-primary tracking-tight">
               PuertaUCI
-            </h1>
-            <p className="text-xs text-uci-gray-500 -mt-0.5">
+              </h1>
+              <p className="hidden sm:block text-xs text-uci-gray-500 -mt-0.5">
               Control de Acceso al Campus
-            </p>
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Info del usuario */}
         {usuario && (
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-uci-gray-50 rounded-lg border border-uci-gray-200">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-uci-gray-50 rounded-lg border border-uci-gray-200">
               {usuario.rol === 'admin' ? (
                 <Shield size={16} className="text-uci-primary" />
               ) : (
@@ -47,7 +66,7 @@ export default function Header() {
             </div>
             <button
               onClick={signOut}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-uci-gray-600 hover:text-status-danger hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-sm text-uci-gray-600 hover:text-status-danger hover:bg-red-50 rounded-lg transition-colors"
               title="Cerrar sesión"
             >
               <LogOut size={16} />
