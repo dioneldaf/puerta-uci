@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  puertauci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_UCI_API_URL: ${VITE_UCI_API_URL:-/api/uci/sgu-directorio/_search}
+        VITE_UCI_API_AUTH: ${VITE_UCI_API_AUTH}
+    image: puertauci:latest
+    container_name: puertauci-web
+    ports:
+      - "8080:80"
+    restart: unless-stopped

@@ -128,6 +128,8 @@ Ejecuta las migraciones **en orden** desde el **SQL Editor** de Supabase (Dashbo
 | 3 | `supabase/migrations/003_fix_rls_recursion.sql` | Funciones `SECURITY DEFINER` para evitar recursión RLS |
 | 4 | `supabase/migrations/004_cuba_timezone.sql` | Zona horaria America/Havana |
 | 5 | `supabase/migrations/005_remove_puerta_asignada.sql` | Eliminar columna `puerta_asignada` de usuarios |
+| 6 | `supabase/migrations/006_vehiculos.sql` | Módulo de vehículos autorizados + registros de entradas/salidas |
+| 7 | `supabase/migrations/007_vehiculos_chapa_opcional.sql` | Chapa opcional para moto/triciclo (`chapa o color`) |
 
 ### Pasos:
 
@@ -258,6 +260,88 @@ server {
 
 1. Conecta el repositorio.
 2. Configura el build command: `npm run build`
+
+---
+
+## Despliegue con Docker
+
+Este proyecto ya incluye:
+
+- `Dockerfile` (multi-stage: build con Node + runtime con Nginx)
+- `docker-compose.yml`
+- `.dockerignore`
+- `docker/nginx/default.conf` (SPA + proxy `/api/uci`)
+
+### 1. Requisitos en el servidor
+
+- Docker 24+
+- Docker Compose plugin (`docker compose`)
+- Conectividad HTTPS hacia:
+    - Supabase (`*.supabase.co`)
+    - `elasticintranet.uci.cu`
+
+### 2. Variables necesarias para construir
+
+Estas variables se inyectan en build (Vite):
+
+```env
+VITE_SUPABASE_URL=TU_URL_SUPABASE
+VITE_SUPABASE_ANON_KEY=TU_ANON_KEY
+VITE_UCI_API_URL=/api/uci/sgu-directorio/_search
+VITE_UCI_API_AUTH=Basic TU_TOKEN
+```
+
+### 3. Levantar con Docker Compose
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+La app quedará expuesta en `http://IP_DEL_SERVIDOR:8080`.
+
+### 4. Ver logs y estado
+
+```bash
+docker compose ps
+docker compose logs -f puertauci
+```
+
+### 5. Actualizar versión
+
+```bash
+git pull
+docker compose build --no-cache
+docker compose up -d
+```
+
+### 6. Qué información pasar al equipo de infraestructura
+
+Comparte estos puntos:
+
+1. **Puerto publicado**: `8080` (o el que decidan mapear).
+2. **Dominio final**: por ejemplo `puertauci.uci.cu`.
+3. **TLS/SSL**: si terminan HTTPS en reverse proxy externo (Nginx/Traefik).
+4. **Variables de build**:
+     - `VITE_SUPABASE_URL`
+     - `VITE_SUPABASE_ANON_KEY`
+     - `VITE_UCI_API_AUTH`
+5. **Conectividad de red** a `elasticintranet.uci.cu` y Supabase.
+6. **Política de restart**: actualmente `unless-stopped`.
+7. **Estrategia de backups** de la BD (en Supabase).
+
+### 7. Comando alternativo sin compose
+
+```bash
+docker build \
+    --build-arg VITE_SUPABASE_URL="..." \
+    --build-arg VITE_SUPABASE_ANON_KEY="..." \
+    --build-arg VITE_UCI_API_URL="/api/uci/sgu-directorio/_search" \
+    --build-arg VITE_UCI_API_AUTH="Basic ..." \
+    -t puertauci:latest .
+
+docker run -d --name puertauci-web -p 8080:80 --restart unless-stopped puertauci:latest
+```
 3. Directorio de salida: `dist`
 4. Agrega las variables de entorno (`VITE_SUPABASE_URL`, etc.)
 
